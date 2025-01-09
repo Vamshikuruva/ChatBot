@@ -1,6 +1,6 @@
 transformers
 torch==2.4.1
-torchvision 
+torchvision==0.19.1
 torchaudio
 accelerate>=0.26.0
 numpy<2
