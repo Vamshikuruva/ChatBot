@@ -21,43 +21,44 @@ def model_initialization():
     processor = AutoProcessor.from_pretrained("Qwen/Qwen2-VL-7B-Instruct")
     return model, processor
 
-def get_output(model, processor, path, question):
-  messages = [
-      {
-          "role": "user",
-          "content": [
-              {
-                  "type": "text",
-                  "text": read_docx(path),
-              },
-              {"type": "text", "text": question},
-          ],
-      }
-  ]
+def get_output(model, processor, context, question):
+    messages = [
+          {
+              "role": "user",
+              "content": [
+                  {
+                      "type": "text",
+                      "text": context,
+                  },
+                  {"type": "text", "text": question},
+              ],
+          }
+      ]
 
-  # Preparation for inference
-  text = processor.apply_chat_template(
-      messages, tokenize=False, add_generation_prompt=True
-  )
-  image_inputs, video_inputs = process_vision_info(messages)
-  inputs = processor(
-      text=[text],
-      images=image_inputs,
-      videos=video_inputs,
-      padding=True,
-      return_tensors="pt",
-  )
-  inputs = inputs.to("cpu")
+    # Preparation for inference
+    text = processor.apply_chat_template(
+    messages, tokenize=False, add_generation_prompt=True
+    )
+    image_inputs, video_inputs = process_vision_info(messages)
+    inputs = processor(
+    text=[text],
+    images=image_inputs,
+    videos=video_inputs,
+    padding=True,
+    return_tensors="pt",
+    )
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    inputs = inputs.to(device)
 
-  # Inference: Generation of the output
-  generated_ids = model.generate(**inputs, max_new_tokens=128)
-  generated_ids_trimmed = [
-      out_ids[len(in_ids) :] for in_ids, out_ids in zip(inputs.input_ids, generated_ids)
-  ]
-  output_text = processor.batch_decode(
-      generated_ids_trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
-  )
-  return output_text
+    # Inference: Generation of the output
+    generated_ids = model.generate(**inputs, max_new_tokens=128)
+    generated_ids_trimmed = [
+    out_ids[len(in_ids) :] for in_ids, out_ids in zip(inputs.input_ids, generated_ids)
+    ]
+    output_text = processor.batch_decode(
+    generated_ids_trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
+    )
+    return output_text[0] if output_text else "No response generated."
 
 # Streamlit App
 st.set_page_config(layout="wide") 
@@ -91,9 +92,14 @@ if st.session_state.uploaded:
         #right col
         with cols[1]:
             # Initialize model
-            with st.spinner("Initializing model..."):
-                model, processor = model_initialization()
-            st.success("Model loaded successfully!")
+            try:
+                with st.spinner("Initializing model..."):
+                    model, processor = model_initialization()
+                    st.success("Model loaded successfully!")
+            except Exception as e:
+                st.error(f"Error loading the model: {e}")
+                st.stop()
+            
             # Chat history
             if "chat_history" not in st.session_state:
                 st.session_state.chat_history = []
@@ -101,6 +107,9 @@ if st.session_state.uploaded:
             user_input = st.text_input("Your Message:", placeholder="Ask something about the document...")
 
             if st.button("Send"):
+                if not user_input.strip():
+                    st.warning("Please enter a valid query.")
+                    
                 if user_input.strip():
                     with st.spinner("Processing..."):
                         try:
