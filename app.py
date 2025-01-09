@@ -16,11 +16,10 @@ def read_docx(path):
 def model_initialization():
     """Initializes the Qwen model and processor."""
     try:
-        device = "cuda" if torch.cuda.is_available() else "cpu"
         model = Qwen2VLForConditionalGeneration.from_pretrained(
             "Qwen/Qwen2-VL-7B-Instruct",
-            torch_dtype=torch.float16 if device == "cuda" else torch.float32,
-            device_map="auto" if device == "cuda" else None,
+            torch_dtype='auto',
+            device_map='auto',
         )
         processor = AutoProcessor.from_pretrained("Qwen/Qwen2-VL-7B-Instruct")
         return model, processor
@@ -30,7 +29,6 @@ def model_initialization():
 
 def get_output(model, processor, content, question):
     try:
-        device = "cuda" if torch.cuda.is_available() else "cpu"
         messages = [
             {
                 "role": "user",
@@ -51,7 +49,7 @@ def get_output(model, processor, content, question):
             padding=True,
             return_tensors="pt",
         )
-        inputs = inputs.to(device)
+        inputs = inputs.to("cuda")
 
         # Generate output
         generated_ids = model.generate(**inputs, max_new_tokens=128)
