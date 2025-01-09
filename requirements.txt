@@ -1,5 +1,5 @@
 transformers
-torch 
+torch=2.4.1
 torchvision 
 torchaudio
 accelerate>=0.26.0
