@@ -15,50 +15,57 @@ def read_docx(path):
 @st.cache_resource
 def model_initialization():
     """Initializes the Qwen model and processor."""
-    model = Qwen2VLForConditionalGeneration.from_pretrained(
-        "Qwen/Qwen2-VL-7B-Instruct", torch_dtype="auto", device_map="auto",  _fast_init=True
-    )
-    processor = AutoProcessor.from_pretrained("Qwen/Qwen2-VL-7B-Instruct")
-    return model, processor
+    try:
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        model = Qwen2VLForConditionalGeneration.from_pretrained(
+            "Qwen/Qwen2-VL-7B-Instruct",
+            torch_dtype=torch.float16 if device == "cuda" else torch.float32,
+            device_map="auto" if device == "cuda" else None,
+        )
+        processor = AutoProcessor.from_pretrained("Qwen/Qwen2-VL-7B-Instruct")
+        return model, processor
+    except Exception as e:
+        st.error(f"Error loading model: {e}")
+        raise
 
-def get_output(model, processor, context, question):
-    messages = [
-          {
-              "role": "user",
-              "content": [
-                  {
-                      "type": "text",
-                      "text": context,
-                  },
-                  {"type": "text", "text": question},
-              ],
-          }
-      ]
+def get_output(model, processor, content, question):
+    try:
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": content},
+                    {"type": "text", "text": question},
+                ],
+            }
+        ]
 
-    # Preparation for inference
-    text = processor.apply_chat_template(
-    messages, tokenize=False, add_generation_prompt=True
-    )
-    image_inputs, video_inputs = process_vision_info(messages)
-    inputs = processor(
-    text=[text],
-    images=image_inputs,
-    videos=video_inputs,
-    padding=True,
-    return_tensors="pt",
-    )
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    inputs = inputs.to(device)
+        # Prepare inputs
+        text = processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+        image_inputs, video_inputs = process_vision_info(messages)
+        inputs = processor(
+            text=[text],
+            images=image_inputs,
+            videos=video_inputs,
+            padding=True,
+            return_tensors="pt",
+        )
+        inputs = inputs.to(device)
 
-    # Inference: Generation of the output
-    generated_ids = model.generate(**inputs, max_new_tokens=128)
-    generated_ids_trimmed = [
-    out_ids[len(in_ids) :] for in_ids, out_ids in zip(inputs.input_ids, generated_ids)
-    ]
-    output_text = processor.batch_decode(
-    generated_ids_trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
-    )
-    return output_text[0] if output_text else "No response generated."
+        # Generate output
+        generated_ids = model.generate(**inputs, max_new_tokens=128)
+        generated_ids_trimmed = [
+            out_ids[len(in_ids):] for in_ids, out_ids in zip(inputs.input_ids, generated_ids)
+        ]
+        output_text = processor.batch_decode(
+            generated_ids_trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
+        )
+        return output_text[0] if output_text else "No response generated."
+    except Exception as e:
+        st.error(f"Error during inference: {e}")
+        return "An error occurred during processing."
+
 
 # Streamlit App
 st.set_page_config(layout="wide") 
