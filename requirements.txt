@@ -1,7 +1,4 @@
-torch
-torchvision
-transformers
-transformers[torch] --upgrade
+pip install transformers torch torchvision torchaudio --upgrade
 accelerate>=0.26.0
 numpy<2
 python-docx
